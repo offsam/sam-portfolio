@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  background: #05070D;
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+  cursor: none;
+}
+
+.site-viewport {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.site-track {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+}
+
+.site-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.site-particles > div {
+  pointer-events: none !important;
+}
+
+.site-particles canvas {
+  pointer-events: none;
+}
+
+.site-cursor-layer {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.site-cursor-layer canvas {
+  pointer-events: none;
+}
+
+.site-ui {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.site-viewport--hide-cursor,
+.site-viewport--hide-cursor * {
+  cursor: none !important;
+}
