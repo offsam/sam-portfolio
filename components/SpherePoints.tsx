@@ -159,12 +159,13 @@ const APP_PHONE_CLOUD_WIDTH_FRAC  = 0.70
 const APP_PHONE_GLYPH_NATIVE_H = 0.96
 const APP_PHONE_GLYPH_NATIVE_W = 0.42
 
-const PLAY_RIM_POINT_COUNT = 1700
-const PLAY_DISK_POINT_COUNT = 4100
-const PLAY_TRI_POINT_COUNT = 2200
+const PLAY_RIM_POINT_COUNT = 3600
+const PLAY_DISK_POINT_COUNT = 3800
+const PLAY_TRI_POINT_COUNT = 600
 const PLAY_RIM_DELAY_SEC = 0.00
 const PLAY_DISK_DELAY_SEC = 0.56
 const PLAY_TRI_DELAY_SEC = 1.24
+const PLAY_LAYER_STAGGER = 0.52
 const PLAY_PART_TRAVEL_SEC = 0.74
 const PLAY_ROT_Y = 0.56
 const PLAY_TILT_X = 0.28
@@ -173,7 +174,6 @@ const PLAY_CLOUD_HEIGHT_FRAC = 0.74
 const PLAY_NATIVE_W = 1.22
 const PLAY_NATIVE_H = 1.22
 const PLAY_MAGNET_BASE = 0.08
-const PLAY_MAGNET_PEAK = 1.0 - PLAY_MAGNET_BASE
 const PLAY_LOCK_PROX = 0.14
 
 // ─── Easing ──────────────────────────────────────────────────────────────────
@@ -3060,15 +3060,27 @@ function initPlayLocked(): Float32Array {
   return new Float32Array(POINT_COUNT)
 }
 
+function playParticleDelaySec(i: number): number {
+  if (i < PLAY_RIM_POINT_COUNT) {
+    return PLAY_RIM_DELAY_SEC + (i / PLAY_RIM_POINT_COUNT) * PLAY_LAYER_STAGGER
+  }
+  if (i < PLAY_RIM_POINT_COUNT + PLAY_DISK_POINT_COUNT) {
+    const local = i - PLAY_RIM_POINT_COUNT
+    return PLAY_DISK_DELAY_SEC + (local / PLAY_DISK_POINT_COUNT) * PLAY_LAYER_STAGGER
+  }
+  const local = i - PLAY_RIM_POINT_COUNT - PLAY_DISK_POINT_COUNT
+  return PLAY_TRI_DELAY_SEC + (local / PLAY_TRI_POINT_COUNT) * PLAY_LAYER_STAGGER
+}
+
 function tickPlayBuildU(buildU: Float32Array, buildAgeSec: number): void {
   for (let i = 0; i < POINT_COUNT; i++) {
-    const delay = (i / POINT_COUNT) * 1.8
+    const delay = playParticleDelaySec(i)
     const age = buildAgeSec - delay
     if (age <= 0) {
       buildU[i] = 0
       continue
     }
-    buildU[i] = Math.min(1, age / APP_PHONE_PART_TRAVEL_SEC)
+    buildU[i] = Math.min(1, age / PLAY_PART_TRAVEL_SEC)
   }
 }
 
@@ -3424,49 +3436,58 @@ function getPlayTargetPosition(
 ): { x: number; y: number; z: number } {
   const stableCx = cx + (targetX - cx) * blend
   const stableCy = cy + (targetY - cy) * blend
+  const adjustedScale = playScale * 1.5
+  const adjustedLockProx = lockProx * 1.5
+  const shiftX = stableCx * 0.22
   const formW = Math.max(blend, 0.72)
-  const device = glyphVisionPlayButton(i, playScale, formW, spinAngle)
-  const target = {
-    x: stableCx + device.ox,
+
+  if (buildUArr && lockedArr) {
+    if (buildUArr[i] <= 0.001) {
+      const bustle = 0.052 * Math.sin(time * 5.4 + layout.wobblePhase[i] * 2.1)
+      const tx = organic.x + Math.cos(ang) * r + flutter + bustle * (hash01(i, 61) - 0.5)
+      const ty = organic.y + Math.sin(ang) * r + flutter * 0.55 + bustle * (hash01(i, 62) - 0.5)
+      const tz = organic.z
+      const morphPull = morphK * (0.22 + hash01(i, 9) * 0.48)
+      return {
+        x: baseX + (tx - baseX) * morphPull,
+        y: baseY + (ty - baseY) * morphPull,
+        z: baseZ + tz * morphPull,
+      }
+    }
+
+    const device = glyphVisionPlayButton(i, adjustedScale, formW, spinAngle)
+    const playX = stableCx + device.ox + shiftX
+    const playY = stableCy + device.oy
+    const playZ = device.oz
+
+    if (lockedArr[i] > 0.5) {
+      return { x: playX, y: playY, z: playZ }
+    }
+
+    const partU = smoothstep(buildUArr[i])
+    const magnetW = assembleRamp * (
+      PLAY_MAGNET_BASE + partU * (1.0 - PLAY_MAGNET_BASE)
+    )
+    const px = baseX + (playX - baseX) * magnetW
+    const py = baseY + (playY - baseY) * magnetW
+    const pz = baseZ + (playZ - baseZ) * magnetW * 0.52
+    if (
+      partU > 0.42
+      && buildAgeSec > 0.2
+      && Math.hypot(px - playX, py - playY) < adjustedLockProx * 1.35
+    ) {
+      lockedArr[i] = 1
+      return { x: playX, y: playY, z: playZ }
+    }
+    return { x: px, y: py, z: pz }
+  }
+
+  const device = glyphVisionPlayButton(i, adjustedScale, formW, spinAngle)
+  return {
+    x: stableCx + device.ox + shiftX,
     y: stableCy + device.oy,
     z: device.oz,
   }
-
-  if (!buildUArr || !lockedArr) {
-    return target
-  }
-
-  if (buildUArr[i] <= 0.001) {
-    const bustle = 0.052 * Math.sin(time * 5.4 + layout.wobblePhase[i] * 2.1)
-    const tx = organic.x + Math.cos(ang) * r + flutter + bustle * (hash01(i, 61) - 0.5)
-    const ty = organic.y + Math.sin(ang) * r + flutter * 0.55 + bustle * (hash01(i, 62) - 0.5)
-    const tz = organic.z
-    const morphPull = morphK * (0.22 + hash01(i, 9) * 0.48)
-    return {
-      x: baseX + (tx - baseX) * morphPull,
-      y: baseY + (ty - baseY) * morphPull,
-      z: baseZ + tz * morphPull,
-    }
-  }
-
-  if (lockedArr[i] > 0.5) {
-    return target
-  }
-
-  const partU = smoothstep(buildUArr[i])
-  const magnetW = assembleRamp * (PLAY_MAGNET_BASE + partU * PLAY_MAGNET_PEAK)
-  const px = baseX + (target.x - baseX) * magnetW
-  const py = baseY + (target.y - baseY) * magnetW
-  const pz = baseZ + (target.z - baseZ) * magnetW * 0.56
-  if (
-    partU > 0.42
-    && buildAgeSec > 0.2
-    && Math.hypot(px - target.x, py - target.y) < lockProx * 1.35
-  ) {
-    lockedArr[i] = 1
-    return target
-  }
-  return { x: px, y: py, z: pz }
 }
 
 function applyResideOverlay(
